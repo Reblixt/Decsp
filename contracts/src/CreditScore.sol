@@ -78,8 +78,6 @@ contract CreditScore is
         // set the amount, time, interest, paidDebt, debt, totalPaid
     }
 
-    function updateCreditScore() internal {}
-
     function getActiveNumberOfPaymentPlans(
         address taker
     ) public pure returns (uint256) {
@@ -177,4 +175,5 @@ contract CreditScore is
     }
 
     // ================= Internal Functions ====================
+    function updateCreditScore() internal {}
 }

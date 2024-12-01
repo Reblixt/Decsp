@@ -11,7 +11,9 @@ make install
 
 make compile
 
-make deploy
+make deploy-anvil
+make deploy-amoy 
+make deploy-polygon
 
 make test
 make test-covarage
