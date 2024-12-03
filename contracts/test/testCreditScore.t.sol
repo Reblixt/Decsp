@@ -69,7 +69,7 @@ contract TestCreditScore is Test {
 
     vm.startPrank(lender);
     scoreKeeper.newClient(bob);
-    bool userIsActive = scoreKeeper.isActiveUser(bob);
+    bool userIsActive = scoreKeeper.isClientActive(bob);
     uint256 score = scoreKeeper.getUserCreditScore(bob);
     vm.stopPrank();
 
@@ -84,6 +84,17 @@ contract TestCreditScore is Test {
     vm.stopPrank();
 
     assertEq(unpaidDept, 0);
+  }
+
+  function test_GetMeanCreditScore() public {
+    vm.prank(bob);
+    scoreKeeper.approveLender(lender);
+    vm.startPrank(lender);
+    scoreKeeper.newClient(bob);
+    uint256 meanScore = scoreKeeper.getMeanCreditScore(bob);
+    vm.stopPrank();
+
+    assertEq(meanScore, 300);
   }
 
   // ------Reverts------

@@ -64,6 +64,7 @@ contract CreditScore is
     error ProfileDoesNotExist();
     error ProfileAlreadyExists();
     error CreditScoreAlreadyExists();
+    error ProfileDoesNotHaveCreditScore();
 
     function initialize(address owner) public initializer {
         _grantRole(DEFAULT_ADMIN_ROLE, owner);
@@ -73,12 +74,15 @@ contract CreditScore is
     }
 
     // =================== User Functions =======================
+    /// @dev Creates a new profile for the client/user
+    /// @notice This function can only be called once per user
     function newProfile() external {
         require(profileExists(msg.sender) == false, ProfileAlreadyExists());
         userProfiles[msg.sender].exists = true;
     }
 
     /// @dev User approves a lender to access their credit score
+    /// @notice This function also creates a profile for the user if it does not exist
     /// @param lender The address of the lender to approve
     function approveLender(address lender) external {
         // require(profileExists(msg.sender), ProfileDoesNotExist());
@@ -87,6 +91,7 @@ contract CreditScore is
         userProfiles[msg.sender].approvedLender[lender] = true;
     }
 
+    /// @dev User/client can see their credit score from a specific lender
     function getMyCreditScore(
         address lender
     ) public view returns (uint256 score) {
@@ -97,22 +102,29 @@ contract CreditScore is
 
     /** 
       @dev CreditScore ranges between 300 and 850
-      @param taker The address of the user to create a credit score for
+      @param client The address of the user to create a credit score for
     */
-    function newClient(address taker) external onlyRole(LENDER_ROLE) {
-        require(profileExists(taker) == true, ProfileDoesNotExist());
-        require(isActiveUser(taker) == false, CreditScoreAlreadyExists());
-        require(isLenderApprovedByUser(taker, msg.sender), LenderNotApproved());
-        userProfiles[taker].creditScore[msg.sender] = 300;
+    function newClient(address client) external onlyRole(LENDER_ROLE) {
+        require(profileExists(client) == true, ProfileDoesNotExist());
+        require(isClientActive(client) == false, CreditScoreAlreadyExists());
+        require(
+            isLenderApprovedByUser(client, msg.sender),
+            LenderNotApproved()
+        );
+        userProfiles[client].creditScore[msg.sender] = 300;
+        userProfiles[client].numberOfCreditScores++;
+        userProfiles[client].lenders.push(msg.sender);
     }
 
+    //TODO: Implement the payment function
     function payment(uint256 amount) external nonReentrant {
         // checks if the taker has payed within the paymentplan give + score else - score
         // if the whole debt is paid, the payment plan is set to inactive
     }
 
+    //TODO: Implement the createPaymentPlan function
     function createPaymentPlan(
-        address taker,
+        address client,
         uint256 amount,
         uint256 time,
         uint256 interest
@@ -123,11 +135,11 @@ contract CreditScore is
     }
 
     /// @dev Returns the credit score of a user
-    /// @param taker The address of the user to get the credit score for
+    /// @param client The address of the user to get the credit score for
     function getUserCreditScore(
-        address taker
+        address client
     ) public view onlyRole(LENDER_ROLE) returns (uint256 score) {
-        score = userProfiles[taker].creditScore[msg.sender];
+        score = userProfiles[client].creditScore[msg.sender];
     }
 
     // ================= Admin Functions ====================
@@ -191,18 +203,32 @@ contract CreditScore is
 
     // ================= Getter Functions ======================
 
-    function getMeanCreditScore(
-        address taker
-    ) public view returns (uint256 mean) {}
-
-    function getTotalUnpaidDebt(address taker) public view returns (uint256) {
+    function getMeanCreditScore(address client) public view returns (uint256) {
         require(
-            hasRole(LENDER_ROLE, msg.sender) || msg.sender == taker,
+            hasRole(LENDER_ROLE, msg.sender) || msg.sender == client,
             NotAuthorized()
         );
-        uint16 numberOfPaymentPlans = userProfiles[taker].numberOfPaymentPlans;
-        // address[] memory lenders = userProfiles[taker].lenders;
-        uint16[] memory paymentPlanIds = userProfiles[taker].paymentPlanID;
+        require(
+            isLenderApprovedByUser(client, msg.sender),
+            LenderNotApproved()
+        );
+        address[] memory lenders = userProfiles[client].lenders;
+        require(lenders.length > 0, ProfileDoesNotHaveCreditScore());
+
+        uint256 totalScore;
+        for (uint256 i = 0; i < lenders.length; i++) {
+            totalScore += userProfiles[client].creditScore[lenders[i]];
+        }
+        return totalScore / lenders.length;
+    }
+
+    function getTotalUnpaidDebt(address client) public view returns (uint256) {
+        require(
+            hasRole(LENDER_ROLE, msg.sender) || msg.sender == client,
+            NotAuthorized()
+        );
+        uint16 numberOfPaymentPlans = userProfiles[client].numberOfPaymentPlans;
+        uint16[] memory paymentPlanIds = userProfiles[client].paymentPlanID;
         uint256 totalDebt;
         for (uint16 i = 0; i < numberOfPaymentPlans; i++) {
             totalDebt += paymentPlanID[paymentPlanIds[i]].unpaidDebt;
@@ -211,32 +237,32 @@ contract CreditScore is
     }
 
     function getActiveNumberOfPaymentPlans(
-        address taker
+        address client
     ) public view returns (uint16 numberOfPaymentPlans) {
         require(
-            hasRole(LENDER_ROLE, msg.sender) || msg.sender == taker,
+            hasRole(LENDER_ROLE, msg.sender) || msg.sender == client,
             NotAuthorized()
         );
-        numberOfPaymentPlans = userProfiles[taker].numberOfPaymentPlans;
+        numberOfPaymentPlans = userProfiles[client].numberOfPaymentPlans;
     }
 
-    function isActiveUser(
-        address taker
+    function isClientActive(
+        address client
     ) public view onlyRole(LENDER_ROLE) returns (bool) {
         address lender = msg.sender;
-        bool active = (userProfiles[taker].creditScore[lender] > 0);
+        bool active = (userProfiles[client].creditScore[lender] > 0);
         return active;
     }
 
     function isLenderApprovedByUser(
-        address taker,
+        address client,
         address lender
     ) public view returns (bool approved) {
         require(
-            hasRole(LENDER_ROLE, lender) || msg.sender == taker,
+            hasRole(LENDER_ROLE, lender) || msg.sender == client,
             LenderIsNotClient()
         );
-        approved = userProfiles[taker].approvedLender[lender];
+        approved = userProfiles[client].approvedLender[lender];
     }
 
     function isLenderClient(
@@ -246,9 +272,10 @@ contract CreditScore is
     }
 
     // ================= Internal Functions ====================
+    //TODO: Implement the updateCreditScore function
     function updateCreditScore() internal {}
 
-    function profileExists(address taker) internal view returns (bool exists) {
-        exists = userProfiles[taker].exists;
+    function profileExists(address client) internal view returns (bool exists) {
+        exists = userProfiles[client].exists;
     }
 }
