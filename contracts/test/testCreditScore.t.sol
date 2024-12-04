@@ -46,6 +46,48 @@ contract TestCreditScore is Test {
     assertTrue(scoreKeeper.isLenderClient(lender));
   }
 
+  function test_GetMyCreditScore() public {
+    vm.prank(bob);
+    scoreKeeper.approveLender(lender);
+
+    vm.prank(lender);
+    scoreKeeper.newClient(bob);
+
+    vm.prank(bob);
+    uint256 score = scoreKeeper.getMyCreditScore(lender);
+
+    assertEq(score, 300);
+  }
+
+  function test_ApproveNewPaymentPlan() public {
+    vm.prank(bob);
+    scoreKeeper.approveLender(lender);
+    uint256 Id = Helper_createPaymentPlan(bob);
+
+    vm.startPrank(bob);
+    scoreKeeper.approveNewPaymentPlan(Id);
+    (bool isActive, , , , , , ) = scoreKeeper.getPaymentPlan(Id);
+    vm.stopPrank();
+    assertTrue(isActive);
+  }
+
+  function test_PayInstallment() public {
+    uint256 Id = Helper_createPaymentPlan(alice);
+    vm.startPrank(alice);
+    scoreKeeper.approveLender(lender);
+    scoreKeeper.approveNewPaymentPlan(Id);
+    vm.stopPrank();
+
+    vm.startPrank(lender);
+    scoreKeeper.payment(20e18, Id);
+    (, , , uint256 unpaidAmount, uint256 totalPaid, , ) = scoreKeeper
+      .getPaymentPlan(Id);
+    vm.stopPrank();
+
+    assertEq(unpaidAmount, 80e18);
+    assertEq(totalPaid, 20e18);
+  }
+
   // ------Reverts------
   function test_RevertWhenProfileAlreadyExists() public {
     vm.expectRevert(CreditScore.ProfileAlreadyExists.selector);
@@ -97,7 +139,7 @@ contract TestCreditScore is Test {
   }
 
   function test_createPaymentPlan() public {
-    uint256 Id = Helper_createPaymentPlan();
+    uint256 Id = Helper_createPaymentPlan(alice);
     vm.prank(lender);
     (
       bool isActive,
@@ -110,12 +152,75 @@ contract TestCreditScore is Test {
     ) = scoreKeeper.getPaymentPlan(Id);
 
     assertFalse(isActive);
-    assertEq(Deadline + 1, block.timestamp + 1 days);
+    assertEq(Deadline + 1, block.timestamp + 30 days * 5);
     assertEq(paidAmount, 0);
     assertEq(unpaidAmount, 100e18);
     assertEq(totalPaid, 0);
     assertEq(numInstallments, 5);
     assertEq(interestRate, 100);
+  }
+
+  function test_GetActiveNumberOfPaymentPlans() public {
+    uint256 Id1 = Helper_createPaymentPlan(alice);
+    uint256 Id2 = Helper_createPaymentPlan(alice);
+    uint256 Id3 = Helper_createPaymentPlan(alice);
+    vm.startPrank(alice);
+    scoreKeeper.approveNewPaymentPlan(Id1);
+    scoreKeeper.approveNewPaymentPlan(Id2);
+    scoreKeeper.approveNewPaymentPlan(Id3);
+    vm.stopPrank();
+
+    vm.startPrank(lender);
+    uint256 activePlans = scoreKeeper.getActiveNumberOfPaymentPlans(alice);
+    vm.stopPrank();
+
+    assertEq(activePlans, 3);
+  }
+
+  function test_GetNextInsalmentAmount() public {
+    uint256 Id = Helper_PrepareUntillPaymentFunction(bob);
+    uint256 nextInstallment = scoreKeeper.getNextInstalmentAmount(Id);
+    // 20 * 100 / 5 = 20
+    assertEq(nextInstallment, 20e18);
+  }
+
+  function test_GetNextInsalmentDeadline() public {
+    uint256 Id = Helper_PrepareUntillPaymentFunction(bob);
+    uint256 nextDeadline = scoreKeeper.getNextInstalmentDeadline(Id);
+    assertEq(nextDeadline, block.timestamp + 30 days);
+  }
+
+  function test_GetTimeBetweenInstallments() public {
+    uint256 Id = Helper_PrepareUntillPaymentFunction(bob);
+    uint256 timeBetweenInstallments = scoreKeeper.getTimeBetweenInstalment(Id);
+    assertEq(timeBetweenInstallments, 30 days);
+  }
+
+  function test_IsLenderApprovedByUser() public {
+    vm.prank(lender);
+    bool isFalse = scoreKeeper.isLenderApprovedByUser(charlie, lender);
+    assertEq(isFalse, false);
+    bool isTrue = scoreKeeper.isLenderApprovedByUser(alice, lender);
+    assertEq(isTrue, true);
+  }
+
+  function test_IsInstalmentOnTime() public {
+    uint256 Id = Helper_PrepareUntillPaymentFunction(bob);
+    vm.warp(block.timestamp + 62 days);
+    bool onTime = scoreKeeper.isInstalmentOnTime(Id);
+    assertFalse(onTime);
+    uint256 Id2 = Helper_PrepareUntillPaymentFunction(charlie);
+    vm.warp(block.timestamp + 20 days);
+    bool onTime2 = scoreKeeper.isInstalmentOnTime(Id2);
+    assertTrue(onTime2);
+  }
+
+  function test_IsInstalmentSufficient() public {
+    uint256 Id = Helper_PrepareUntillPaymentFunction(bob);
+    bool sufficient1 = scoreKeeper.isInstalmentSufficient(Id, 10e18);
+    assertFalse(sufficient1);
+    bool sufficient2 = scoreKeeper.isInstalmentSufficient(Id, 20e18);
+    assertTrue(sufficient2);
   }
 
   // ------Reverts------
@@ -178,21 +283,49 @@ contract TestCreditScore is Test {
     assertTrue(scoreKeeper.paused() == false);
   }
 
+  function test_GetActiveLenders() public {
+    address newLender = vm.addr(0x202);
+    address newLender2 = vm.addr(0x203);
+    vm.startPrank(owner);
+    scoreKeeper.addLender(newLender);
+    scoreKeeper.addLender(newLender2);
+
+    address[] memory activeLenders = scoreKeeper.getActiveLenders();
+    vm.stopPrank();
+
+    assertEq(activeLenders.length, 3);
+    assertEq(activeLenders[0], lender);
+    assertEq(activeLenders[1], newLender);
+    assertEq(activeLenders[2], newLender2);
+  }
+
   // ------Reverts------
 
   // =============== Helper Funcitons ===============
-  function Helper_createPaymentPlan() public returns (uint256) {
+  function Helper_createPaymentPlan(address client) public returns (uint256) {
     vm.startPrank(lender);
-    uint256 deadline = 1 days;
+    uint256 deadline = 30 days * 5;
     uint256 amountToLend = 100e18;
     uint256 Id = scoreKeeper.createPaymentPlan(
-      alice,
+      client,
       amountToLend,
       deadline,
       5,
       100
     );
     vm.stopPrank();
+    return Id;
+  }
+
+  function Helper_PrepareUntillPaymentFunction(
+    address client
+  ) public returns (uint256) {
+    vm.prank(client);
+    scoreKeeper.approveLender(lender);
+    uint256 Id = Helper_createPaymentPlan(client);
+    vm.prank(client);
+    scoreKeeper.approveNewPaymentPlan(Id);
+
     return Id;
   }
 }

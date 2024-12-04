@@ -21,6 +21,7 @@ contract CreditScore is
         address owner;
         bool active;
         uint256 time;
+        uint256 lastPayment;
         uint256 paidDebt;
         uint256 unpaidDebt;
         uint256 totalPaid;
@@ -113,19 +114,19 @@ contract CreditScore is
     /// @notice This function can only be called by the owner that intends to accept
     /// the payment plan, and the payment plan must be active, and the user must have
     /// a credit score from the lender that created the payment plan
-    function approveNewPaymentPlan(uint64 Id) external whenNotPaused {
+    function approveNewPaymentPlan(uint256 Id) external whenNotPaused {
         require(
             paymentPlanID[Id].owner == msg.sender,
             PaymentPlanDoNotMatchUser()
         );
-        require(userProfiles[msg.sender].paymentPlanID[Id] > 0, NonZero());
         require(paymentPlanID[Id].active == false, NotActive());
         uint256[] memory planID = userProfiles[msg.sender].paymentPlanID;
         for (uint256 i = 0; i < planID.length; i++) {
             if (planID[i] == Id) revert AlreadyExists();
         }
-        // This startes the Payment plan Clock
+        //// This startes the Payment plan Clock
         paymentPlanID[Id].time = paymentPlanID[Id].time + block.timestamp;
+        paymentPlanID[Id].lastPayment = block.timestamp;
         paymentPlanID[Id].active = true;
         userProfiles[msg.sender].numberOfPaymentPlans++;
         userProfiles[msg.sender].paymentPlanID.push(Id);
@@ -203,6 +204,7 @@ contract CreditScore is
             owner: client,
             active: false,
             time: time,
+            lastPayment: 0,
             paidDebt: 0,
             unpaidDebt: amount,
             totalPaid: 0,
@@ -219,6 +221,10 @@ contract CreditScore is
     function getUserCreditScore(
         address client
     ) public view onlyRole(LENDER_ROLE) returns (uint256 score) {
+        require(
+            isLenderApprovedByUser(client, msg.sender),
+            LenderNotApproved()
+        );
         score = userProfiles[client].creditScore[msg.sender];
     }
 
@@ -342,14 +348,15 @@ contract CreditScore is
     function getNextInstalmentDeadline(
         uint256 Id
     ) public view returns (uint256) {
-        return block.timestamp + getTimeBetweenInstalment(Id);
+        return paymentPlanID[Id].lastPayment + getTimeBetweenInstalment(Id);
     }
 
     /// @dev Returns
     function getTimeBetweenInstalment(
         uint256 Id
     ) public view returns (uint256) {
-        uint32 totalPayments = paymentPlanID[Id].NumberOfInstalment;
+        uint32 totalPayments = paymentPlanID[Id].NumberOfInstalment; // 5
+
         return (paymentPlanID[Id].time - block.timestamp) / totalPayments;
     }
 
@@ -478,7 +485,7 @@ contract CreditScore is
                 userProfiles[client].creditScore[lender] = 300;
             }
         }
-
+        paymentPlanID[Id].NumberOfInstalment--;
         emit CreditScoreUpdated(client);
     }
 
