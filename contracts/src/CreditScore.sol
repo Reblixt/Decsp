@@ -339,7 +339,6 @@ contract CreditScore is
         isClient = hasRole(LENDER_ROLE, lender);
     }
 
-    // ================= Internal Functions ====================
     function getNextPaymentAmount(uint256 Id) public view returns (uint256) {
         uint32 totalPayments = paymentPlanID[Id].NumberOfPayments;
         return paymentPlanID[Id].unpaidDebt / totalPayments;
@@ -364,6 +363,8 @@ contract CreditScore is
     ) public view returns (bool) {
         return amount >= getNextPaymentAmount(Id);
     }
+
+    // ================= Internal Functions ====================
 
     function updateCreditScore(uint256 amount, uint256 Id) internal {
         address client = paymentPlanID[Id].owner;
