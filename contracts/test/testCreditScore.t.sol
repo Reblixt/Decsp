@@ -79,7 +79,6 @@ contract TestCreditScore is Test {
 
   function test_GetTotalUnpaidDept() public {
     vm.startPrank(lender);
-    scoreKeeper.createPaymentPlan(alice, 100, 10, 5, 10);
     uint256 unpaidDept = scoreKeeper.getTotalUnpaidDebt(alice);
     vm.stopPrank();
 
@@ -95,6 +94,28 @@ contract TestCreditScore is Test {
     vm.stopPrank();
 
     assertEq(meanScore, 300);
+  }
+
+  function test_createPaymentPlan() public {
+    uint256 Id = Helper_createPaymentPlan();
+    vm.prank(lender);
+    (
+      bool isActive,
+      uint256 Deadline,
+      uint256 paidAmount,
+      uint256 unpaidAmount,
+      uint256 totalPaid,
+      uint32 numInstallments,
+      uint32 interestRate
+    ) = scoreKeeper.getPaymentPlan(Id);
+
+    assertFalse(isActive);
+    assertEq(Deadline + 1, block.timestamp + 1 days);
+    assertEq(paidAmount, 0);
+    assertEq(unpaidAmount, 100e18);
+    assertEq(totalPaid, 0);
+    assertEq(numInstallments, 5);
+    assertEq(interestRate, 100);
   }
 
   // ------Reverts------
