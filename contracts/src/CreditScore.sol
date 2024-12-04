@@ -18,24 +18,25 @@ contract CreditScore is
     bytes32 public constant LENDER_ROLE = keccak256("BANK_ROLE");
 
     struct PaymentPlan {
-        uint64 interestRate;
-        uint256 amount;
+        address owner;
+        bool active;
         uint256 time;
         uint256 paidDebt;
         uint256 unpaidDebt;
         uint256 totalPaid;
-        bool active;
+        uint32 NumberOfPayments;
+        uint16 interest;
     }
 
     struct UserProfile {
-        mapping(address lender => uint16) creditScore;
+        bool exists;
+        address[] lenders;
+        uint16 meanScore;
+        uint256[] paymentPlanID;
         uint16 numberOfCreditScores;
         uint16 numberOfPaymentPlans;
-        uint16[] paymentPlanID;
-        uint16 meanScore;
-        address[] lenders;
+        mapping(address lender => uint16) creditScore;
         mapping(address lender => bool) approvedLender;
-        bool exists;
     }
 
     mapping(address => UserProfile) private userProfiles;
@@ -43,20 +44,26 @@ contract CreditScore is
 
     // ================= State Variables =================
     address[] private activeLenders;
+    uint256 private paymentPlanCounter;
 
     // ================= Events ==========================
+    event NewProfileCreated(address indexed client);
+    event ApprovedLender(address indexed lender);
+
     event LenderAdded(address indexed lender);
     event LenderRemoved(address indexed lender);
     event LenderUpdated(address indexed lender, address indexed newLender);
 
     event PaymentPlanPaid(address indexed taker);
-    event PaymentPlanCreated(address indexed taker);
+    event PaymentPlanCreated(uint256 indexed ID);
 
     event CreditScoreCreated(address indexed taker);
     event CreditScoreUpdated(address indexed taker);
 
     // ================= Errors ==========================
-
+    error NonZero();
+    error NotActive();
+    error AlreadyExists();
     error NotAuthorized();
     error UserNotApproved();
     error LenderIsNotClient();
@@ -64,6 +71,7 @@ contract CreditScore is
     error ProfileDoesNotExist();
     error ProfileAlreadyExists();
     error CreditScoreAlreadyExists();
+    error PaymentPlanDoNotMatchUser();
     error ProfileDoesNotHaveCreditScore();
 
     function initialize(address owner) public initializer {
@@ -79,16 +87,18 @@ contract CreditScore is
     function newProfile() external {
         require(profileExists(msg.sender) == false, ProfileAlreadyExists());
         userProfiles[msg.sender].exists = true;
+        emit NewProfileCreated(msg.sender);
     }
 
     /// @dev User approves a lender to access their credit score
     /// @notice This function also creates a profile for the user if it does not exist
     /// @param lender The address of the lender to approve
     function approveLender(address lender) external {
-        // require(profileExists(msg.sender), ProfileDoesNotExist());
         userProfiles[msg.sender].exists = true;
         require(isLenderClient(lender), LenderIsNotClient());
         userProfiles[msg.sender].approvedLender[lender] = true;
+
+        emit ApprovedLender(lender);
     }
 
     /// @dev User/client can see their credit score from a specific lender
@@ -96,6 +106,29 @@ contract CreditScore is
         address lender
     ) public view returns (uint256 score) {
         score = userProfiles[msg.sender].creditScore[lender];
+    }
+
+    /// @dev User/clinet have to approve the payment plan before it can be used
+    /// and attached to the user profile
+    /// @param Id The ID of the payment plan to approve
+    /// @notice This function can only be called by the owner that intends to accept
+    /// the payment plan, and the payment plan must be active, and the user must have
+    /// a credit score from the lender that created the payment plan
+    function approveNewPaymentPlan(uint64 Id) external {
+        require(
+            paymentPlanID[Id].owner == msg.sender,
+            PaymentPlanDoNotMatchUser()
+        );
+        require(userProfiles[msg.sender].paymentPlanID[Id] > 0, NonZero());
+        require(paymentPlanID[Id].active == true, NotActive());
+        uint256[] memory planID = userProfiles[msg.sender].paymentPlanID;
+        for (uint256 i = 0; i < planID.length; i++) {
+            if (planID[i] == Id) revert AlreadyExists();
+        }
+        // This startes the Payment plan Clock
+        paymentPlanID[Id].time = paymentPlanID[Id].time + block.timestamp;
+        userProfiles[msg.sender].numberOfPaymentPlans++;
+        userProfiles[msg.sender].paymentPlanID.push(Id);
     }
 
     //==================== Lender Functions ====================
@@ -114,24 +147,59 @@ contract CreditScore is
         userProfiles[client].creditScore[msg.sender] = 300;
         userProfiles[client].numberOfCreditScores++;
         userProfiles[client].lenders.push(msg.sender);
+
+        emit CreditScoreCreated(client);
     }
 
     //TODO: Implement the payment function
-    function payment(uint256 amount) external nonReentrant {
+    function payment(uint256 amount, uint256 Id) external nonReentrant {
         // checks if the taker has payed within the paymentplan give + score else - score
         // if the whole debt is paid, the payment plan is set to inactive
+        require(paymentPlanID[Id].active == true, NotActive());
+        if (amount > paymentPlanID[Id].unpaidDebt) {
+            paymentPlanID[Id].unpaidDebt = 0;
+            paymentPlanID[Id].active = false;
+        } else {
+            paymentPlanID[Id].unpaidDebt -= amount;
+            paymentPlanID[Id].totalPaid += amount;
+        }
+        updateCreditScore(amount, Id);
+        emit PaymentPlanPaid(msg.sender);
     }
 
-    //TODO: Implement the createPaymentPlan function
+    /// @dev Choose delibrately not to include if active paymentPlanID check incase
+    /// the lender wants to create multiple payment plans for the same client
+    /// @param client The address of the user to create a payment plan for
+    /// @param amount The amount of the payment plan
+    /// @param time The time the payment plan should be paid back
+    /// @param interest The interest rate of the payment plan in percentage where 5& is 500
     function createPaymentPlan(
         address client,
         uint256 amount,
         uint256 time,
+        uint32 NumberOfPayments,
         uint256 interest
-    ) external onlyRole(LENDER_ROLE) nonReentrant {
-        // checks if the taker has a credit score
-        // create a new payment plan for the taker
-        // set the amount, time, interest, paidDebt, debt, totalPaid
+    ) external onlyRole(LENDER_ROLE) nonReentrant returns (uint256) {
+        require(
+            isLenderApprovedByUser(client, msg.sender),
+            LenderNotApproved()
+        );
+        require(profileExists(client) == true, ProfileDoesNotExist());
+        uint256 ID = ++paymentPlanCounter;
+
+        paymentPlanID[ID] = PaymentPlan({
+            owner: client,
+            active: true,
+            time: time,
+            paidDebt: 0,
+            unpaidDebt: amount,
+            totalPaid: 0,
+            NumberOfPayments: NumberOfPayments,
+            interest: uint16(interest)
+        });
+
+        emit PaymentPlanCreated(ID);
+        return ID;
     }
 
     /// @dev Returns the credit score of a user
@@ -228,7 +296,7 @@ contract CreditScore is
             NotAuthorized()
         );
         uint16 numberOfPaymentPlans = userProfiles[client].numberOfPaymentPlans;
-        uint16[] memory paymentPlanIds = userProfiles[client].paymentPlanID;
+        uint256[] memory paymentPlanIds = userProfiles[client].paymentPlanID;
         uint256 totalDebt;
         for (uint16 i = 0; i < numberOfPaymentPlans; i++) {
             totalDebt += paymentPlanID[paymentPlanIds[i]].unpaidDebt;
@@ -272,8 +340,91 @@ contract CreditScore is
     }
 
     // ================= Internal Functions ====================
-    //TODO: Implement the updateCreditScore function
-    function updateCreditScore() internal {}
+    function getNextPaymentAmount(uint256 Id) public view returns (uint256) {
+        uint32 totalPayments = paymentPlanID[Id].NumberOfPayments;
+        return paymentPlanID[Id].unpaidDebt / totalPayments;
+    }
+
+    function getTimePerPayment(uint256 Id) public view returns (uint256) {
+        uint32 totalPayments = paymentPlanID[Id].NumberOfPayments;
+        return (paymentPlanID[Id].time - block.timestamp) / totalPayments;
+    }
+
+    function getNextPaymentDeadline(uint256 Id) public view returns (uint256) {
+        return block.timestamp + getTimePerPayment(Id);
+    }
+
+    function isPaymentOnTime(uint256 Id) public view returns (bool) {
+        return block.timestamp <= getNextPaymentDeadline(Id);
+    }
+
+    function isPaymentSufficient(
+        uint256 Id,
+        uint256 amount
+    ) public view returns (bool) {
+        return amount >= getNextPaymentAmount(Id);
+    }
+
+    function updateCreditScore(uint256 amount, uint256 Id) internal {
+        address client = paymentPlanID[Id].owner;
+        address lender = msg.sender;
+        uint16 currentScore = userProfiles[client].creditScore[lender];
+
+        // Check payment conditions using getter functions
+        bool meetsPaymentAmount = isPaymentSufficient(Id, amount);
+        bool isOnTime = isPaymentOnTime(Id);
+        uint256 expectedPaymentAmount = getNextPaymentAmount(Id);
+
+        if (isOnTime && meetsPaymentAmount) {
+            // Maximum increase for perfect payment
+            uint16 increase = 30;
+
+            // Adjust increase based on payment size relative to expected
+            if (amount > expectedPaymentAmount) {
+                uint256 extraPaymentPercent = ((amount -
+                    expectedPaymentAmount) * 100) / expectedPaymentAmount;
+                // Additional points for paying more than expected (max +10)
+                increase += uint16((extraPaymentPercent * 10) / 100);
+            }
+
+            // Cap increase at 40 points total
+            increase = increase > 40 ? 40 : increase;
+
+            // Apply increase while respecting max score of 850
+            if (currentScore + increase <= 850) {
+                userProfiles[client].creditScore[lender] =
+                    currentScore +
+                    increase;
+            } else {
+                userProfiles[client].creditScore[lender] = 850;
+            }
+        } else {
+            // Base decrease for late payment
+            uint16 decrease = 50;
+
+            // Additional penalty if payment is also below expected amount
+            if (!meetsPaymentAmount) {
+                uint256 shortagePercent = ((expectedPaymentAmount - amount) *
+                    100) / expectedPaymentAmount;
+                // Additional penalty points (max +20)
+                decrease += uint16((shortagePercent * 20) / 100);
+            }
+
+            // Cap decrease at 70 points total
+            decrease = decrease > 70 ? 70 : decrease;
+
+            // Apply decrease while respecting min score of 300
+            if (currentScore > decrease + 300) {
+                userProfiles[client].creditScore[lender] =
+                    currentScore -
+                    decrease;
+            } else {
+                userProfiles[client].creditScore[lender] = 300;
+            }
+        }
+
+        emit CreditScoreUpdated(client);
+    }
 
     function profileExists(address client) internal view returns (bool exists) {
         exists = userProfiles[client].exists;

@@ -79,7 +79,7 @@ contract TestCreditScore is Test {
 
   function test_GetTotalUnpaidDept() public {
     vm.startPrank(lender);
-    scoreKeeper.createPaymentPlan(alice, 100, 10, 10);
+    scoreKeeper.createPaymentPlan(alice, 100, 10, 5, 10);
     uint256 unpaidDept = scoreKeeper.getTotalUnpaidDebt(alice);
     vm.stopPrank();
 
@@ -158,4 +158,20 @@ contract TestCreditScore is Test {
   }
 
   // ------Reverts------
+
+  // =============== Helper Funcitons ===============
+  function Helper_createPaymentPlan() public returns (uint256) {
+    vm.startPrank(lender);
+    uint256 deadline = 1 days;
+    uint256 amountToLend = 100e18;
+    uint256 Id = scoreKeeper.createPaymentPlan(
+      alice,
+      amountToLend,
+      deadline,
+      5,
+      100
+    );
+    vm.stopPrank();
+    return Id;
+  }
 }
