@@ -362,9 +362,11 @@ contract CreditScore is
 
     // ======== Booleans Functions =========
 
-    function isClientActive(
-        address client
-    ) public view onlyRole(LENDER_ROLE) returns (bool) {
+    function isClientActive(address client) public view returns (bool) {
+        require(
+            hasRole(LENDER_ROLE, msg.sender) || msg.sender == client,
+            LenderIsNotClient()
+        );
         address lender = msg.sender;
         bool active = (userProfiles[client].creditScore[lender] > 0);
         return active;
