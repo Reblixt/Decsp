@@ -12,6 +12,9 @@ export default function WalletBtton() {
 
   return (
     <>
+      <Button onClick={() => switchChain("")}>
+        Switch chain
+      </Button>
       {authenticated ? (
         <Button onClick={logout}>
           Disconnect Wallet
