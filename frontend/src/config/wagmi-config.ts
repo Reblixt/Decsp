@@ -1,4 +1,4 @@
-import { http } from "viem";
+import { http } from "wagmi";
 import { createConfig } from "@privy-io/wagmi";
 
 import { anvil, polygon, polygonAmoy } from "viem/chains";

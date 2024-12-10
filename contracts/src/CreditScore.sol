@@ -32,7 +32,7 @@ contract CreditScore is
     struct UserProfile {
         bool exists;
         address[] lenders;
-        uint16 meanScore;
+        // uint16 meanScore;
         uint256[] paymentPlanID;
         uint16 numberOfCreditScores;
         uint16 numberOfPaymentPlans;
@@ -130,6 +130,25 @@ contract CreditScore is
         paymentPlanID[Id].active = true;
         userProfiles[msg.sender].numberOfPaymentPlans++;
         userProfiles[msg.sender].paymentPlanID.push(Id);
+    }
+
+    /// @return bool if the user has a profile
+    /// @return array of lenders that have given the user a credit score
+    /// @return array of paymentPlanID
+    /// @return number of credit scores
+    /// @return number of payment plans
+    function getMyProfile()
+        public
+        view
+        returns (bool, address[] memory, uint256[] memory, uint16, uint16)
+    {
+        return (
+            userProfiles[msg.sender].exists,
+            userProfiles[msg.sender].lenders,
+            userProfiles[msg.sender].paymentPlanID,
+            userProfiles[msg.sender].numberOfCreditScores,
+            userProfiles[msg.sender].numberOfPaymentPlans
+        );
     }
 
     //==================== Lender Functions ====================
@@ -296,10 +315,12 @@ contract CreditScore is
             hasRole(LENDER_ROLE, msg.sender) || msg.sender == client,
             NotAuthorized()
         );
-        require(
-            isLenderApprovedByUser(client, msg.sender),
-            LenderNotApproved()
-        );
+        if (hasRole(LENDER_ROLE, msg.sender)) {
+            require(
+                isLenderApprovedByUser(client, msg.sender),
+                LenderNotApproved()
+            );
+        }
         address[] memory lenders = userProfiles[client].lenders;
         require(lenders.length > 0, ProfileDoesNotHaveCreditScore());
 
@@ -363,10 +384,7 @@ contract CreditScore is
     // ======== Booleans Functions =========
 
     function isClientActive(address client) public view returns (bool) {
-        require(
-            hasRole(LENDER_ROLE, msg.sender) || msg.sender == client,
-            LenderIsNotClient()
-        );
+        require(hasRole(LENDER_ROLE, msg.sender), LenderIsNotClient());
         address lender = msg.sender;
         bool active = (userProfiles[client].creditScore[lender] > 0);
         return active;

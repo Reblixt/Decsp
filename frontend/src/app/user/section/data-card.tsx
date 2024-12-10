@@ -1,4 +1,5 @@
 "use client"
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -8,8 +9,9 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { creditScoreAbi, creditScoreAddress } from "@/contracts/creditScore";
-import { Address } from "viem";
-import { useReadContract, useWalletClient } from "wagmi"
+import { useEffect, useMemo } from "react";
+import { Address, createWalletClient } from "viem";
+import { useAccount, useReadContract, useWalletClient, useWriteContract } from "wagmi"
 
 
 
@@ -22,38 +24,85 @@ const data = [
 
 export function DataTable() {
   const { data: client } = useWalletClient();
-  const { data: isClientActive } = useReadContract({
+  const { data: activeData, status, error } = useReadContract({
     abi: creditScoreAbi,
     address: creditScoreAddress,
-    functionName: "isClientActive",
-    args: [client?.account as unknown as Address],
+    functionName: "getMyProfile",
+    account: client?.account,
   });
 
-  console.log("isClientActive", isClientActive);
 
+  const { writeContract: write, status: wStatus, error: wError, isSuccess } = useWriteContract();
 
+  const profileData = useMemo(() => {
+    if (!activeData) return {
+      active: false,
+      lenders: [] as Address[],
+      paymentPlans: [] as bigint[],
+      numberOfCreditScores: 0,
+      numberOfLoans: 0
+    };
+
+    return {
+      active: activeData[0],
+      lenders: activeData[1] as Address[],
+      paymentPlans: activeData[2] as bigint[],
+      numberOfCreditScores: activeData[3],
+      numberOfLoans: activeData[4],
+    };
+  }, [activeData]);
+
+  useEffect(() => {
+    if (profileData.active) {
+
+    }
+  }, [profileData]);
+
+  console.log("profileData", profileData);
+  console.log("status", status);
+  console.log("error", error);
+
+  if (!activeData) {
+    return <div>Loading...</div>
+  }
+
+  // TODO: Add the fetch data from each Lender
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>ID</TableHead>
-          <TableHead>Name</TableHead>
-          <TableHead>Age</TableHead>
-          <TableHead>City</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {data.map((row) => (
-          <TableRow key={row.id}>
-            <TableCell>{row.id}</TableCell>
-            <TableCell>{row.name}</TableCell>
-            <TableCell>{row.age}</TableCell>
-            <TableCell>{row.city}</TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <>
+      {!profileData.active &&
+        <div>
+          <Button onClick={() => write({
+            abi: creditScoreAbi,
+            address: creditScoreAddress,
+            functionName: "newProfile",
+          })}>Create a profile</Button>
+
+
+        </div>}
+      {profileData.active &&
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Loaner</TableHead>
+              <TableHead></TableHead>
+              <TableHead>Age</TableHead>
+              <TableHead>City</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell>{row.id}</TableCell>
+                <TableCell>{row.name}</TableCell>
+                <TableCell>{row.age}</TableCell>
+                <TableCell>{row.city}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      }
+    </>
   )
 }
 

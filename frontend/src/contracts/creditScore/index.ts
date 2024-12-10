@@ -93,6 +93,19 @@ export const creditScoreAbi = [
   },
   {
     type: "function",
+    name: "getMyProfile",
+    inputs: [],
+    outputs: [
+      { name: "", type: "bool", internalType: "bool" },
+      { name: "", type: "address[]", internalType: "address[]" },
+      { name: "", type: "uint256[]", internalType: "uint256[]" },
+      { name: "", type: "uint16", internalType: "uint16" },
+      { name: "", type: "uint16", internalType: "uint16" },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "getNextInstalmentAmount",
     inputs: [{ name: "Id", type: "uint256", internalType: "uint256" }],
     outputs: [{ name: "", type: "uint256", internalType: "uint256" }],

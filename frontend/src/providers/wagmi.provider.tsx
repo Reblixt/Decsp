@@ -1,5 +1,5 @@
 "use client";
-import { WagmiProvider } from "wagmi";
+import { WagmiProvider } from "@privy-io/wagmi";
 import { config } from "@/config/wagmi-config";
 
 interface WagmiProps {

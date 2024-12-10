@@ -12,7 +12,7 @@ export function StatCard({ title, value }: StatCardProps) {
         <CardTitle>{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-3xl font-bold">{value.toString().padStart(3, '0')}</p>
+        <p className="text-3xl font-bold">{value.toString()}</p>
       </CardContent>
     </Card>
   )
