@@ -21,6 +21,10 @@ export default function MeanCreditScore() {
     return Number(meanScore);
   }
 
+  if (meanStatus === 'error') {
+    console.error(meanError)
+  }
+
   return (
     <div>
       {meanStatus === 'success' && <StatCard title="Mean CreditScore" value={handlemeanScore(meanScore)} />}

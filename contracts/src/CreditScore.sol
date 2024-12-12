@@ -15,7 +15,7 @@ contract CreditScore is
 {
     // ================= Type Declarations =================
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
-    bytes32 public constant LENDER_ROLE = keccak256("BANK_ROLE");
+    bytes32 public constant LENDER_ROLE = keccak256("LENDER_ROLE");
 
     struct PaymentPlan {
         address owner;
@@ -151,6 +151,55 @@ contract CreditScore is
         );
     }
 
+    /// @dev Returns all the payment plans of a user
+    function getAllMyPaymentPlans()
+        public
+        view
+        returns (
+            bool[] memory,
+            uint256[] memory,
+            uint256[] memory,
+            uint256[] memory,
+            uint256[] memory,
+            uint32[] memory,
+            uint16[] memory
+        )
+    {
+        uint256[] memory planID = userProfiles[msg.sender].paymentPlanID;
+        bool[] memory active = new bool[](planID.length);
+        uint256[] memory time = new uint256[](planID.length);
+        uint256[] memory paidDebt = new uint256[](planID.length);
+        uint256[] memory unpaidDebt = new uint256[](planID.length);
+        uint256[] memory totalPaid = new uint256[](planID.length);
+        uint32[] memory NumberOfInstalment = new uint32[](planID.length);
+        uint16[] memory interest = new uint16[](planID.length);
+        for (uint i = 0; i < planID.length; i++) {
+            uint256 Id = planID[i];
+            require(
+                msg.sender == paymentPlanID[Id].owner ||
+                    hasRole(LENDER_ROLE, msg.sender),
+                NotAuthorized()
+            );
+            PaymentPlan memory plan = paymentPlanID[Id];
+            active[i] = plan.active;
+            time[i] = plan.time;
+            paidDebt[i] = plan.paidDebt;
+            unpaidDebt[i] = plan.unpaidDebt;
+            totalPaid[i] = plan.totalPaid;
+            NumberOfInstalment[i] = plan.NumberOfInstalment;
+            interest[i] = plan.interest;
+        }
+        return (
+            active,
+            time,
+            paidDebt,
+            unpaidDebt,
+            totalPaid,
+            NumberOfInstalment,
+            interest
+        );
+    }
+
     //==================== Lender Functions ====================
 
     /** 
@@ -173,18 +222,20 @@ contract CreditScore is
         emit CreditScoreCreated(client);
     }
 
-    /// @dev Should allways be able to be called by the client
+    /// @dev This function is for the lender to use in their own system
     /// @param amount The amount of the payment
     /// @param Id The ID of the payment plan
     function payment(uint256 amount, uint256 Id) external nonReentrant {
         // checks if the taker has payed within the paymentplan give + score else - score
         // if the whole debt is paid, the payment plan is set to inactive
+        require(hasRole(LENDER_ROLE, msg.sender), NotAuthorized());
         require(paymentPlanID[Id].active == true, NotActive());
         if (amount > paymentPlanID[Id].unpaidDebt) {
             paymentPlanID[Id].unpaidDebt = 0;
             paymentPlanID[Id].active = false;
         } else {
             paymentPlanID[Id].unpaidDebt -= amount;
+            paymentPlanID[Id].paidDebt += amount;
             paymentPlanID[Id].totalPaid += amount;
         }
         updateCreditScore(amount, Id);
@@ -257,7 +308,7 @@ contract CreditScore is
     }
 
     function addLender(address lender) external onlyRole(ADMIN_ROLE) {
-        grantRole(LENDER_ROLE, lender);
+        _grantRole(LENDER_ROLE, lender);
         activeLenders.push(lender);
         emit LenderAdded(lender);
     }

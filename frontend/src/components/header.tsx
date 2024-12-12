@@ -19,6 +19,11 @@ export function Header() {
           Lender
         </Link>
       </div>
+      <div className="border rounded p-1 border-black bg-white ">
+        <Link href="/admin">
+          Admin
+        </Link>
+      </div>
       <WalletBtton />
     </header>
   )

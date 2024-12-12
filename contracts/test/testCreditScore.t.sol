@@ -71,21 +71,45 @@ contract TestCreditScore is Test {
     assertTrue(isActive);
   }
 
-  function test_PayInstallment() public {
+  function test_GetAllMyPayments() public {
     uint256 Id = Helper_createPaymentPlan(alice);
+    uint256 id2 = Helper_createPaymentPlan(alice);
     vm.startPrank(alice);
     scoreKeeper.approveLender(lender);
     scoreKeeper.approveNewPaymentPlan(Id);
+    scoreKeeper.approveNewPaymentPlan(id2);
     vm.stopPrank();
 
     vm.startPrank(lender);
     scoreKeeper.payment(20e18, Id);
-    (, , , uint256 unpaidAmount, uint256 totalPaid, , ) = scoreKeeper
-      .getPaymentPlan(Id);
     vm.stopPrank();
 
-    assertEq(unpaidAmount, 80e18);
-    assertEq(totalPaid, 20e18);
+    vm.startPrank(alice);
+    (
+      bool[] memory actives,
+      uint256[] memory Deadlines,
+      uint256[] memory paidAmounts,
+      uint256[] memory unpaidAmounts,
+      uint256[] memory totalPaids,
+      uint32[] memory numInstallments,
+      uint16[] memory interestRate
+    ) = scoreKeeper.getAllMyPaymentPlans();
+    vm.stopPrank();
+    // console.log("actives", actives[0]);
+    assertEq(actives[0], true);
+    assertEq(Deadlines[0], block.timestamp + 30 days * 5);
+    assertEq(paidAmounts[0], 20e18);
+    assertEq(unpaidAmounts[0], 80e18);
+    assertEq(totalPaids[0], 20e18);
+    assertEq(numInstallments[0], 4);
+    assertEq(interestRate[0], 100);
+    assertEq(actives[1], true);
+    assertEq(Deadlines[1], block.timestamp + 30 days * 5);
+    assertEq(paidAmounts[1], 0);
+    assertEq(unpaidAmounts[1], 100e18);
+    assertEq(totalPaids[1], 0);
+    assertEq(numInstallments[1], 5);
+    assertEq(interestRate[1], 100);
   }
 
   // ------Reverts------
@@ -221,6 +245,23 @@ contract TestCreditScore is Test {
     assertFalse(sufficient1);
     bool sufficient2 = scoreKeeper.isInstalmentSufficient(Id, 20e18);
     assertTrue(sufficient2);
+  }
+
+  function test_PayInstallment() public {
+    uint256 Id = Helper_createPaymentPlan(alice);
+    vm.startPrank(alice);
+    scoreKeeper.approveLender(lender);
+    scoreKeeper.approveNewPaymentPlan(Id);
+    vm.stopPrank();
+
+    vm.startPrank(lender);
+    scoreKeeper.payment(20e18, Id);
+    (, , , uint256 unpaidAmount, uint256 totalPaid, , ) = scoreKeeper
+      .getPaymentPlan(Id);
+    vm.stopPrank();
+
+    assertEq(unpaidAmount, 80e18);
+    assertEq(totalPaid, 20e18);
   }
 
   // ------Reverts------

@@ -1,13 +1,15 @@
 "use client";
 import { usePrivy } from "@privy-io/react-auth";
 import { Button } from "./ui/button";
-import { useSwitchChain } from "wagmi";
+import { useAccount, useSwitchChain } from "wagmi";
 import { config } from "@/config/wagmi-config";
 import { useState } from "react";
 
 export default function WalletBtton() {
   const { login, logout, authenticated } = usePrivy();
   const [chainId, setChainId] = useState<31337 | 137 | 80002>(31337);
+
+  const account = useAccount();
 
   const { switchChain, status } = useSwitchChain({
     config: config,
@@ -16,6 +18,7 @@ export default function WalletBtton() {
   console.log("status", status);
   // console.log("data", data);
   console.log("chainId", chainId);
+
 
 
 
@@ -28,9 +31,12 @@ export default function WalletBtton() {
         <option value={80002}>Polygon Amoy</option>
       </select>
       {authenticated ? (
-        <Button onClick={logout}>
-          Disconnect Wallet
-        </Button>
+        <div>
+          <Button onClick={logout}>
+            Disconnect Wallet
+          </Button>
+          <p>{account.address?.slice(0, 5)}...{account.address?.slice(-4)}</p>
+        </div>
       ) : (
         <Button onClick={login}>
           Connect Wallet

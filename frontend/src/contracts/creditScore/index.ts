@@ -79,6 +79,21 @@ export const creditScoreAbi = [
   },
   {
     type: "function",
+    name: "getAllMyPaymentPlans",
+    inputs: [],
+    outputs: [
+      { name: "", type: "bool[]", internalType: "bool[]" },
+      { name: "", type: "uint256[]", internalType: "uint256[]" },
+      { name: "", type: "uint256[]", internalType: "uint256[]" },
+      { name: "", type: "uint256[]", internalType: "uint256[]" },
+      { name: "", type: "uint256[]", internalType: "uint256[]" },
+      { name: "", type: "uint32[]", internalType: "uint32[]" },
+      { name: "", type: "uint16[]", internalType: "uint16[]" },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "getMeanCreditScore",
     inputs: [{ name: "client", type: "address", internalType: "address" }],
     outputs: [{ name: "", type: "uint256", internalType: "uint256" }],

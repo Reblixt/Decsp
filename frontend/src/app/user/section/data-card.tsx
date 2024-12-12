@@ -10,26 +10,26 @@ import {
 } from "@/components/ui/table"
 import { creditScoreAbi, creditScoreAddress } from "@/contracts/creditScore";
 import { useEffect, useMemo } from "react";
-import { Address, createWalletClient } from "viem";
-import { useAccount, useReadContract, useWalletClient, useWriteContract } from "wagmi"
+import { Address } from "viem";
+import { useReadContract, useWalletClient, useWriteContract } from "wagmi"
 
-
-
-const data = [
-  { id: 1, name: "John Doe", age: 28, city: "New York" },
-  { id: 2, name: "Jane Smith", age: 32, city: "Los Angeles" },
-  { id: 3, name: "Bob Johnson", age: 45, city: "Chicago" },
-  { id: 4, name: "Alice Brown", age: 22, city: "Houston" },
-]
 
 export function DataTable() {
   const { data: client } = useWalletClient();
+
   const { data: activeData, status, error } = useReadContract({
     abi: creditScoreAbi,
     address: creditScoreAddress,
     functionName: "getMyProfile",
     account: client?.account,
   });
+
+  const { data: paymentPlan, status: pStatus, error: pError } = useReadContract({
+    abi: creditScoreAbi,
+    address: creditScoreAddress,
+    functionName: "getAllMyPaymentPlans",
+    account: client?.account,
+  })
 
 
   const { writeContract: write, status: wStatus, error: wError, isSuccess } = useWriteContract();
@@ -52,6 +52,22 @@ export function DataTable() {
     };
   }, [activeData]);
 
+
+  const paymentPlanData = useMemo(() => {
+    if (!paymentPlan) return [];
+
+    return paymentPlan[0].map((_, index) => ({
+      active: paymentPlan[0][index],
+      duration: paymentPlan[1][index],
+      paidDebt: paymentPlan[2][index],
+      unPaidDebt: paymentPlan[3][index],
+      totalPaid: paymentPlan[4][index],
+      numberOfInstallments: paymentPlan[5][index],
+      interestRate: paymentPlan[6][index],
+    }));
+
+  }, [paymentPlan])
+
   useEffect(() => {
     if (profileData.active) {
 
@@ -66,7 +82,16 @@ export function DataTable() {
     return <div>Loading...</div>
   }
 
-  // TODO: Add the fetch data from each Lender
+  function monthsUntil(timestamp: number): number {
+    const now = new Date(); // Dagens datum
+    const futureDate = new Date(timestamp * 1000); // Konvertera tidsstämpeln till millisekunder
+
+    const yearsDifference = futureDate.getFullYear() - now.getFullYear();
+    const monthsDifference = futureDate.getMonth() - now.getMonth();
+
+    // Total skillnad i månader
+    return yearsDifference * 12 + monthsDifference;
+  }
 
   return (
     <>
@@ -85,19 +110,35 @@ export function DataTable() {
           <TableHeader>
             <TableRow>
               <TableHead>Loaner</TableHead>
-              <TableHead></TableHead>
-              <TableHead>Age</TableHead>
-              <TableHead>City</TableHead>
+              <TableHead>Active</TableHead>
+              <TableHead>Duration in month</TableHead>
+              <TableHead>Paid debt</TableHead>
+              <TableHead>Unpaid debt</TableHead>
+              {/* <TableHead>Total paid debt</TableHead> */}
+              <TableHead>Number of installments</TableHead>
+              <TableHead>Interest rate</TableHead>
+              <TableHead>Plan ID</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell>{row.id}</TableCell>
-                <TableCell>{row.name}</TableCell>
-                <TableCell>{row.age}</TableCell>
-                <TableCell>{row.city}</TableCell>
-              </TableRow>
+            {profileData.lenders.map((lender, index) => (
+
+              paymentPlanData.map((plan, i) => {
+                return (
+                  <TableRow key={i}>
+                    <TableCell>{lender.slice(0, 5)}..{lender.slice(-4)}</TableCell>
+                    <TableCell>{String(plan.active)}</TableCell>
+                    <TableCell>{monthsUntil(Number(plan.duration))} Months</TableCell>
+                    <TableCell>{plan.paidDebt} SEK</TableCell>
+                    <TableCell>{plan.unPaidDebt} SEK</TableCell>
+                    {/* <TableCell>{plan.totalPaid}</TableCell> */}
+                    <TableCell>{plan.numberOfInstallments} st</TableCell>
+                    <TableCell>{plan.interestRate}%</TableCell>
+                    <TableCell>{profileData.paymentPlans[i]}</TableCell>
+
+                  </TableRow>
+                )
+              })
             ))}
           </TableBody>
         </Table>
