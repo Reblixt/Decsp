@@ -18,6 +18,7 @@ contract CreditScore is
     bytes32 public constant LENDER_ROLE = keccak256("LENDER_ROLE");
 
     struct PaymentPlan {
+        address Lender;
         address owner;
         bool active;
         uint256 time;
@@ -271,6 +272,7 @@ contract CreditScore is
         uint256 ID = ++paymentPlanCounter;
 
         paymentPlanID[ID] = PaymentPlan({
+            Lender: msg.sender,
             owner: client,
             active: false,
             time: time,
@@ -467,6 +469,10 @@ contract CreditScore is
         uint256 amount
     ) public view returns (bool) {
         return amount >= getNextInstalmentAmount(Id);
+    }
+
+    function getLenderFromId(uint256 Id) public view returns (address) {
+        return paymentPlanID[Id].Lender;
     }
 
     function getPaymentPlan(

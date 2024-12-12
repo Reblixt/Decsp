@@ -13,7 +13,7 @@ const formSchema = z.object({
   address: z.string().startsWith("0x", { message: "address must start with 0x" }),
 })
 
-export default function ApproveLender() {
+export default function ApproveLender({ className }: { className?: string }) {
   const { writeContract, data, status, error } = useWriteContract()
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -40,7 +40,7 @@ export default function ApproveLender() {
 
 
   return (
-    <div>
+    <div className={className}>
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>

@@ -51,7 +51,7 @@ export default function CreatePaymentPlan() {
 
 
   return (
-    <div className="border-black rounded border-solid border p-2 mb-2">
+    <div>
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>

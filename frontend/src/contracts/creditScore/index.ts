@@ -94,6 +94,13 @@ export const creditScoreAbi = [
   },
   {
     type: "function",
+    name: "getLenderFromId",
+    inputs: [{ name: "Id", type: "uint256", internalType: "uint256" }],
+    outputs: [{ name: "", type: "address", internalType: "address" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "getMeanCreditScore",
     inputs: [{ name: "client", type: "address", internalType: "address" }],
     outputs: [{ name: "", type: "uint256", internalType: "uint256" }],

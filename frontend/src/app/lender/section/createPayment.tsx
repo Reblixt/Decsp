@@ -1,5 +1,5 @@
 "use client"
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -7,19 +7,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useWriteContract } from "wagmi";
 import { creditScoreAbi, creditScoreAddress } from "@/contracts/creditScore";
-import { Address } from "viem";
 
 const formSchema = z.object({
-  address: z.any(),
+  amount: z.any(),
+  id: z.any(),
 })
 
-export default function ApprovePaymentPlan({ className }: { className?: string }) {
+export default function CreatePayment() {
   const { writeContract, data, status, error } = useWriteContract()
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      address: 0,
+      amount: 0,
+      id: 0,
     }
   });
 
@@ -27,8 +28,8 @@ export default function ApprovePaymentPlan({ className }: { className?: string }
     writeContract({
       abi: creditScoreAbi,
       address: creditScoreAddress,
-      functionName: "approveNewPaymentPlan",
-      args: [BigInt(values.address)],
+      functionName: "payment",
+      args: [BigInt(values.amount), BigInt(values.id)],
     })
   }
 
@@ -40,15 +41,26 @@ export default function ApprovePaymentPlan({ className }: { className?: string }
 
 
   return (
-    <div className={className}>
+    <div>
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
-          <FormField control={form.control} name="address" render={({ field }) => (
+          <FormField control={form.control} name="amount" render={({ field }) => (
             <FormItem>
-              <FormLabel>Approve payment plan</FormLabel>
+              <FormLabel>Amount to pay</FormLabel>
               <FormControl>
-                <Input placeholder="Id to Paymentplan" {...field} />
+                <Input placeholder="Amount to pay" type="number" {...field} />
+              </FormControl>
+              <FormMessage />
+
+            </FormItem>
+          )}
+          />
+          <FormField control={form.control} name="id" render={({ field }) => (
+            <FormItem>
+              <FormLabel>Payment plan Id</FormLabel>
+              <FormControl>
+                <Input placeholder="Payment plan Id" type="number" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -59,7 +71,7 @@ export default function ApprovePaymentPlan({ className }: { className?: string }
         </form>
 
       </Form>
-      {status === 'success' && !error && <p>Success</p>}
+      {status === 'success' && <p>Success</p>}
       {status === 'error' && <p>Error</p>}
 
     </div>
