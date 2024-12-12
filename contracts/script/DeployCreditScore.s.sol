@@ -10,22 +10,13 @@ contract DeployCreditScore is Script {
 
     function run() public {
         vm.startBroadcast();
-        // CreditScore scoreKeeper = new CreditScore();
-        // if (block.chainid == 31337) {
-        //     scoreKeeper.initialize(0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266);
-        // } else {
-        //     scoreKeeper.initialize(owner);
-        // }
-        blockTimeTest test = new blockTimeTest();
-        uint blockTime = test.getBlockTime();
+        CreditScore scoreKeeper = new CreditScore();
+        if (block.chainid == 31337) {
+            scoreKeeper.initialize(0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266);
+        } else {
+            scoreKeeper.initialize(owner);
+        }
         vm.stopBroadcast();
-        console.log("Block Time: ", blockTime);
-        // console.log("CreditScore deployed at: ", address(scoreKeeper));
-    }
-}
-
-contract blockTimeTest {
-    function getBlockTime() public view returns (uint) {
-        return block.timestamp;
+        console.log("CreditScore deployed at: ", address(scoreKeeper));
     }
 }
