@@ -5,6 +5,9 @@ pragma solidity ^0.8.28;
 import {Test, console} from "forge-std/Test.sol";
 import {CreditScore} from "src/CreditScore.sol";
 
+//TODO: Add more tests to test if the credit score increase, decrease etc
+//TODO: Add more test to test Reverts
+
 contract TestCreditScore is Test {
   CreditScore scoreKeeper;
 

@@ -133,6 +133,8 @@ contract CreditScore is
         userProfiles[msg.sender].paymentPlanID.push(Id);
     }
 
+    /// @dev Only the user can call this function make sure ta pass in the user as signer when calling
+    /// @notice returns the profile stats of the user
     /// @return bool if the user has a profile
     /// @return array of lenders that have given the user a credit score
     /// @return array of paymentPlanID
@@ -153,6 +155,14 @@ contract CreditScore is
     }
 
     /// @dev Returns all the payment plans of a user
+    /// @notice This function can only be called by the owner of the payment plan
+    /// @return array of active payment plans
+    /// @return array of time the payment plan was created
+    /// @return array of paid debt
+    /// @return array of unpaid debt
+    /// @return array of total paid
+    /// @return array of number of instalments
+    /// @return array of interest rate
     function getAllMyPaymentPlans()
         public
         view
@@ -205,6 +215,8 @@ contract CreditScore is
 
     /** 
       @dev CreditScore ranges between 300 and 850
+      @notice This function can only be called by a lender that has been approved by the user
+      @notice This function can only be called once per user
       @param client The address of the user to create a credit score for
     */
     function newClient(
@@ -223,13 +235,19 @@ contract CreditScore is
         emit CreditScoreCreated(client);
     }
 
+    /// @notice There is a design choice here to not limit the lenders ability to make payment
+    /// more often than the payment plan was meant to. This could increase the credit score of the user unfairly
+    /// for that lender and increase the MeanCreditScore of the user.
+    /// It is up to the lender to decide how to let thier users pay off the debt.
     /// @dev This function is for the lender to use in their own system
     /// @param amount The amount of the payment
     /// @param Id The ID of the payment plan
-    function payment(uint256 amount, uint256 Id) external nonReentrant {
+    function payment(
+        uint256 amount,
+        uint256 Id
+    ) external onlyRole(LENDER_ROLE) nonReentrant {
         // checks if the taker has payed within the paymentplan give + score else - score
         // if the whole debt is paid, the payment plan is set to inactive
-        require(hasRole(LENDER_ROLE, msg.sender), NotAuthorized());
         require(paymentPlanID[Id].active == true, NotActive());
         if (amount > paymentPlanID[Id].unpaidDebt) {
             paymentPlanID[Id].unpaidDebt = 0;
@@ -289,6 +307,7 @@ contract CreditScore is
     }
 
     /// @dev Returns the credit score of a user
+    /// @notice This function can only be called by a lender that has been approved by the user
     /// @param client The address of the user to get the credit score for
     function getUserCreditScore(
         address client
@@ -309,6 +328,9 @@ contract CreditScore is
         _unpause();
     }
 
+    /// @dev Adds a lender to the list of active lenders
+    /// @notice This function can only be called by an admin
+    /// @param lender The address of the lender to add
     function addLender(address lender) external onlyRole(ADMIN_ROLE) {
         _grantRole(LENDER_ROLE, lender);
         activeLenders.push(lender);
@@ -319,6 +341,9 @@ contract CreditScore is
      * the Gas limit of a single transaction.
      * if that is the case, we need to upgrade this contract and remove the foor loop.
      */
+    /// @dev Removes a lender from the list of active activeLenders
+    /// @notice This function can only be called by an admin
+    /// @param lender The address of the lender to remove
     function removeLender(address lender) external onlyRole(ADMIN_ROLE) {
         revokeRole(LENDER_ROLE, lender);
         for (uint256 i = 0; i < activeLenders.length; i++) {
@@ -335,6 +360,10 @@ contract CreditScore is
      * the Gas limit of a single transaction.
      * if that is the case, we need to upgrade this contract and remove the foor loop
      */
+    /// @dev Updates the address of a lender
+    /// @notice This function can only be called by an admin
+    /// @param oldLender The address of the lender to update
+    /// @param newLender The new address of the lender
     function updateLender(
         address oldLender,
         address newLender
@@ -350,6 +379,9 @@ contract CreditScore is
         emit LenderUpdated(oldLender, newLender);
     }
 
+    /// @dev Returns the list of active lenders
+    /// @notice This function can only be called by an admin
+    /// @return lenders array of active lenders
     function getActiveLenders()
         public
         view
@@ -361,6 +393,10 @@ contract CreditScore is
 
     // ================= Getter Functions ======================
 
+    /// @dev Returns the mean credit score of a user
+    /// @notice This function can only be called by a lender that has been approved by the user or the user themselves
+    /// @param client The address of the user to get the mean credit score for
+    /// @return The mean credit score of the user
     function getMeanCreditScore(
         address client
     ) external view returns (uint256) {
@@ -384,6 +420,10 @@ contract CreditScore is
         return totalScore / lenders.length;
     }
 
+    /// @dev Returns the total unpaid debt of a user
+    /// @notice This function can only be called by a lender that has been approved by the user or the user themselves
+    /// @param client The address of the user to get the total unpaid debt for
+    /// @return The total unpaid debt of the user
     function getTotalUnpaidDebt(address client) public view returns (uint256) {
         require(
             hasRole(LENDER_ROLE, msg.sender) || msg.sender == client,
@@ -402,6 +442,9 @@ contract CreditScore is
         return totalDebt;
     }
 
+    /// @dev Returns the number of credit scores of a user
+    /// @param client The address of the user to get the number of credit scores for
+    /// @return numberOfPaymentPlans The number of credit scores of the user
     function getActiveNumberOfPaymentPlans(
         address client
     ) public view returns (uint16 numberOfPaymentPlans) {
@@ -414,18 +457,24 @@ contract CreditScore is
 
     /// @dev Returns the payment plan ID of a user
     /// @param Id The ID of the payment plan to get
+    /// @return The payment plan ID of the user
     function getNextInstalmentAmount(uint256 Id) public view returns (uint256) {
         uint32 totalPayments = paymentPlanID[Id].NumberOfInstalment;
         return paymentPlanID[Id].unpaidDebt / totalPayments;
     }
 
+    /// @dev Returns the next instalment deadline of a user
+    /// @param Id The ID of the payment plan to get
+    /// @return The next instalment deadline of the user
     function getNextInstalmentDeadline(
         uint256 Id
     ) public view returns (uint256) {
         return paymentPlanID[Id].lastPayment + getTimeBetweenInstalment(Id);
     }
 
-    /// @dev Returns
+    /// @dev Returns the time between instalments of a user for a payment plan
+    /// @param Id The ID of the payment plan to get
+    /// @return The time between instalments of the user
     function getTimeBetweenInstalment(
         uint256 Id
     ) public view returns (uint256) {
@@ -436,6 +485,8 @@ contract CreditScore is
 
     // ======== Booleans Functions =========
 
+    /// @param client The address of the user to check
+    /// @return a boolean if the user has a profile
     function isClientActive(address client) public view returns (bool) {
         require(hasRole(LENDER_ROLE, msg.sender), LenderIsNotClient());
         address lender = msg.sender;
@@ -443,6 +494,9 @@ contract CreditScore is
         return active;
     }
 
+    /// @param client The address of the user to check
+    /// @param lender The address of the lender to check
+    /// @return approved a boolean if the lender is approved by the user
     function isLenderApprovedByUser(
         address client,
         address lender
@@ -454,27 +508,46 @@ contract CreditScore is
         approved = userProfiles[client].approvedLender[lender];
     }
 
+    /// @dev Returns whether a user has a profile
+    /// @param lender: The address of the user to check
+    /// @return isClient if the Lender is a client of the CreditScore protocol
     function isLenderClient(
         address lender
     ) public view returns (bool isClient) {
         isClient = hasRole(LENDER_ROLE, lender);
     }
 
-    function isInstalmentOnTime(uint256 Id) public view returns (bool) {
-        return block.timestamp <= getNextInstalmentDeadline(Id);
+    /// @param Id the payment plan ID
+    /// @return onTime boolean if the payment plan is on time
+    function isInstalmentOnTime(uint256 Id) public view returns (bool onTime) {
+        onTime = block.timestamp <= getNextInstalmentDeadline(Id);
     }
 
+    /// @param Id the payment plan ID
+    /// @param amount the amount of the payment
+    /// @return sufficient boolean if the payment is sufficient
     function isInstalmentSufficient(
         uint256 Id,
         uint256 amount
-    ) public view returns (bool) {
-        return amount >= getNextInstalmentAmount(Id);
+    ) public view returns (bool sufficient) {
+        sufficient = amount >= getNextInstalmentAmount(Id);
     }
 
-    function getLenderFromId(uint256 Id) public view returns (address) {
-        return paymentPlanID[Id].Lender;
+    /// @param Id the payment plan ID
+    /// @return lender of the payment plan
+    function getLenderFromId(uint256 Id) public view returns (address lender) {
+        lender = paymentPlanID[Id].Lender;
     }
 
+    /// @notice This function can only be called by the owner of the payment plan or a lender
+    /// @param Id the payment plan ID
+    /// @return active of the payment plan
+    /// @return time of the payment plan
+    /// @return paidDebt of the payment plan
+    /// @return unpaidDebt of the payment plan
+    /// @return totalPaid of the payment plan
+    /// @return NumberOfInstalment of the payment plan
+    /// @return interest of the payment plan
     function getPaymentPlan(
         uint256 Id
     )

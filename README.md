@@ -19,6 +19,8 @@ make test
 make test-covarage
 
 make dev
+
+make doc
 ```
 
 ## Usage
