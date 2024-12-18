@@ -63,11 +63,9 @@ contract CreditScore is
     event CreditScoreUpdated(address indexed taker);
 
     // ================= Errors ==========================
-    error NonZero();
     error NotActive();
     error AlreadyExists();
     error NotAuthorized();
-    error UserNotApproved();
     error LenderIsNotClient();
     error LenderNotApproved();
     error ProfileDoesNotExist();
@@ -133,7 +131,8 @@ contract CreditScore is
         userProfiles[msg.sender].paymentPlanID.push(Id);
     }
 
-    /// @dev Only the user can call this function make sure ta pass in the user as signer when calling
+    /// @dev Only the user can call this function make sure ta pass in the user as signer when
+    /// calling this function in the frontend
     /// @notice returns the profile stats of the user
     /// @return bool if the user has a profile
     /// @return array of lenders that have given the user a credit score
@@ -249,9 +248,14 @@ contract CreditScore is
         // checks if the taker has payed within the paymentplan give + score else - score
         // if the whole debt is paid, the payment plan is set to inactive
         require(paymentPlanID[Id].active == true, NotActive());
-        if (amount > paymentPlanID[Id].unpaidDebt) {
+        if (amount >= paymentPlanID[Id].unpaidDebt) {
             paymentPlanID[Id].unpaidDebt = 0;
             paymentPlanID[Id].active = false;
+            paymentPlanID[Id].paidDebt += amount;
+            paymentPlanID[Id].totalPaid += amount;
+            userProfiles[paymentPlanID[Id].owner].creditScore[msg.sender] += 15;
+            emit PaymentPlanPaid(msg.sender);
+            return;
         } else {
             paymentPlanID[Id].unpaidDebt -= amount;
             paymentPlanID[Id].paidDebt += amount;
