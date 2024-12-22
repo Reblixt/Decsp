@@ -42,7 +42,7 @@ test-coverage:
 	@cd contracts && forge coverage
 
 deploy-anvil:
-	@cd contracts && forge script script/DeployCreditScore.s.sol:DeployCreditScore $(NETWORK_ARGS)
+	@cd contracts && forge clean && forge build && forge script script/DeployCreditScore.s.sol:DeployCreditScore $(NETWORK_ARGS)
 
 deploy-amoy-account:
 	@cd contracts && forge script script/DeployCreditScore.s.sol:DeployCreditScore $(NETWORK_ARGS_ACCOUNT_AMOY)

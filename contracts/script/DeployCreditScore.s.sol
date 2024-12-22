@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 
 import {Script, console} from "forge-std/Script.sol";
 import {CreditScore} from "src/CreditScore.sol";
+import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
 
 contract DeployCreditScore is Script {
     // address owner = msg.sender;
@@ -14,8 +15,12 @@ contract DeployCreditScore is Script {
 
     function run() public {
         vm.startBroadcast();
-        CreditScore scoreKeeper = new CreditScore();
-        scoreKeeper.initialize(owner);
+        // CreditScore scoreKeeper = new CreditScore();
+        // scoreKeeper.initialize(owner);
+        address scoreKeeper = Upgrades.deployUUPSProxy(
+            "CreditScore.sol",
+            abi.encodeCall(CreditScore.initialize, (owner))
+        );
 
         vm.stopBroadcast();
 
