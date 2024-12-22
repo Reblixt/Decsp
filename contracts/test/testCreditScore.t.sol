@@ -350,6 +350,18 @@ contract TestCreditScore is Test {
     assertEq(score, 300);
   }
 
+  function test_UpdateCreditscoreIfDefault() public {
+    uint256 Id = Helper_PrepareUntillPaymentFunction(bob, true);
+    vm.warp(block.timestamp + 30 days * 5);
+    vm.startPrank(lender);
+    scoreKeeper.updateScoresIfDefault(Id);
+    vm.stopPrank();
+    vm.prank(bob);
+    uint256 score = scoreKeeper.getMyCreditScore(lender);
+
+    assertEq(score, 290);
+  }
+
   // ------Reverts------
 
   function test_RevertWhenUserAlreadyExists() public {

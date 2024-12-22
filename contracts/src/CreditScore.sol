@@ -28,6 +28,7 @@ contract CreditScore is
         uint256 totalPaid;
         uint32 NumberOfInstalment;
         uint16 interest;
+        bool defaulted;
     }
 
     struct UserProfile {
@@ -63,7 +64,9 @@ contract CreditScore is
     event CreditScoreUpdated(address indexed taker);
 
     // ================= Errors ==========================
+    error OnTime();
     error NotActive();
+    error NotDefaulted();
     error AlreadyExists();
     error NotAuthorized();
     error LenderIsNotClient();
@@ -73,6 +76,7 @@ contract CreditScore is
     error CreditScoreAlreadyExists();
     error PaymentPlanDoNotMatchUser();
     error ProfileDoesNotHaveCreditScore();
+    error NotDefaultedOrCannotBeCalledTwice();
 
     function initialize(address owner) public initializer {
         _grantRole(ADMIN_ROLE, owner);
@@ -109,26 +113,26 @@ contract CreditScore is
 
     /// @dev User/clinet have to approve the payment plan before it can be used
     /// and attached to the user profile
-    /// @param Id The ID of the payment plan to approve
+    /// @param id The ID of the payment plan to approve
     /// @notice This function can only be called by the owner that intends to accept
     /// the payment plan, and the payment plan must be active, and the user must have
     /// a credit score from the lender that created the payment plan
-    function approveNewPaymentPlan(uint256 Id) external whenNotPaused {
+    function approveNewPaymentPlan(uint256 id) external whenNotPaused {
         require(
-            paymentPlanID[Id].owner == msg.sender,
+            paymentPlanID[id].owner == msg.sender,
             PaymentPlanDoNotMatchUser()
         );
-        require(paymentPlanID[Id].active == false, NotActive());
+        require(paymentPlanID[id].active == false, NotActive());
         uint256[] memory planID = userProfiles[msg.sender].paymentPlanID;
         for (uint256 i = 0; i < planID.length; i++) {
-            if (planID[i] == Id) revert AlreadyExists();
+            if (planID[i] == id) revert AlreadyExists();
         }
         //// This startes the Payment plan Clock
-        paymentPlanID[Id].time = paymentPlanID[Id].time + block.timestamp;
-        paymentPlanID[Id].lastPayment = block.timestamp;
-        paymentPlanID[Id].active = true;
+        paymentPlanID[id].time = paymentPlanID[id].time + block.timestamp;
+        paymentPlanID[id].lastPayment = block.timestamp;
+        paymentPlanID[id].active = true;
         userProfiles[msg.sender].numberOfPaymentPlans++;
-        userProfiles[msg.sender].paymentPlanID.push(Id);
+        userProfiles[msg.sender].paymentPlanID.push(id);
     }
 
     /// @dev Only the user can call this function make sure ta pass in the user as signer when
@@ -234,35 +238,57 @@ contract CreditScore is
         emit CreditScoreCreated(client);
     }
 
+    //BUG:if a user does not pay the scores wont be updated
+
     /// @notice There is a design choice here to not limit the lenders ability to make payment
     /// more often than the payment plan was meant to. This could increase the credit score of the user unfairly
     /// for that lender and increase the MeanCreditScore of the user.
     /// It is up to the lender to decide how to let thier users pay off the debt.
     /// @dev This function is for the lender to use in their own system
     /// @param amount The amount of the payment
-    /// @param Id The ID of the payment plan
+    /// @param id The ID of the payment plan
     function payment(
         uint256 amount,
-        uint256 Id
+        uint256 id
     ) external onlyRole(LENDER_ROLE) nonReentrant {
         // checks if the taker has payed within the paymentplan give + score else - score
         // if the whole debt is paid, the payment plan is set to inactive
-        require(paymentPlanID[Id].active == true, NotActive());
-        if (amount >= paymentPlanID[Id].unpaidDebt) {
-            paymentPlanID[Id].unpaidDebt = 0;
-            paymentPlanID[Id].active = false;
-            paymentPlanID[Id].paidDebt += amount;
-            paymentPlanID[Id].totalPaid += amount;
-            userProfiles[paymentPlanID[Id].owner].creditScore[msg.sender] += 15;
+        require(paymentPlanID[id].active == true, NotActive());
+        if (amount >= paymentPlanID[id].unpaidDebt) {
+            paymentPlanID[id].unpaidDebt = 0;
+            paymentPlanID[id].active = false;
+            paymentPlanID[id].paidDebt += amount;
+            paymentPlanID[id].totalPaid += amount;
+            userProfiles[paymentPlanID[id].owner].creditScore[msg.sender] += 15;
             emit PaymentPlanPaid(msg.sender);
             return;
         } else {
-            paymentPlanID[Id].unpaidDebt -= amount;
-            paymentPlanID[Id].paidDebt += amount;
-            paymentPlanID[Id].totalPaid += amount;
+            paymentPlanID[id].unpaidDebt -= amount;
+            paymentPlanID[id].paidDebt += amount;
+            paymentPlanID[id].totalPaid += amount;
         }
-        updateCreditScore(amount, Id);
+        updateCreditScore(amount, id);
+        paymentPlanID[id].defaulted = false;
         emit PaymentPlanPaid(msg.sender);
+    }
+
+    /// @dev This function is for the lender to use in their own system
+    /// @notice this function is meant to be called by the lender if the user does not pay
+    /// @param id The ID of the payment plan
+    function updateScoresIfDefault(uint256 id) external onlyRole(LENDER_ROLE) {
+        require(paymentPlanID[id].active == true, NotActive());
+        require(isInstalmentOnTime(id) == false, OnTime());
+        require(
+            isPaymentPlanDefaulted(id) == false,
+            NotDefaultedOrCannotBeCalledTwice()
+        );
+        address user = paymentPlanID[id].owner;
+        if (userProfiles[user].creditScore[msg.sender] - 50 < 300) {
+            userProfiles[user].creditScore[msg.sender] = 290;
+        } else {
+            userProfiles[user].creditScore[msg.sender] -= 50;
+        }
+        paymentPlanID[id].defaulted = true;
     }
 
     /// @dev Choosed delibrately not to include if active paymentPlanID check incase
@@ -303,7 +329,8 @@ contract CreditScore is
             unpaidDebt: amount,
             totalPaid: 0,
             NumberOfInstalment: NumberOfPayments,
-            interest: uint16(interest)
+            interest: uint16(interest),
+            defaulted: false
         });
 
         emit PaymentPlanCreated(ID);
@@ -460,31 +487,31 @@ contract CreditScore is
     }
 
     /// @dev Returns the payment plan ID of a user
-    /// @param Id The ID of the payment plan to get
+    /// @param id The ID of the payment plan to get
     /// @return The payment plan ID of the user
-    function getNextInstalmentAmount(uint256 Id) public view returns (uint256) {
-        uint32 totalPayments = paymentPlanID[Id].NumberOfInstalment;
-        return paymentPlanID[Id].unpaidDebt / totalPayments;
+    function getNextInstalmentAmount(uint256 id) public view returns (uint256) {
+        uint32 totalPayments = paymentPlanID[id].NumberOfInstalment;
+        return paymentPlanID[id].unpaidDebt / totalPayments;
     }
 
     /// @dev Returns the next instalment deadline of a user
-    /// @param Id The ID of the payment plan to get
+    /// @param id The ID of the payment plan to get
     /// @return The next instalment deadline of the user
     function getNextInstalmentDeadline(
-        uint256 Id
+        uint256 id
     ) public view returns (uint256) {
-        return paymentPlanID[Id].lastPayment + getTimeBetweenInstalment(Id);
+        return paymentPlanID[id].lastPayment + getTimeBetweenInstalment(id);
     }
 
     /// @dev Returns the time between instalments of a user for a payment plan
-    /// @param Id The ID of the payment plan to get
+    /// @param id The ID of the payment plan to get
     /// @return The time between instalments of the user
     function getTimeBetweenInstalment(
-        uint256 Id
+        uint256 id
     ) public view returns (uint256) {
-        uint32 totalPayments = paymentPlanID[Id].NumberOfInstalment; // 5
+        uint32 totalPayments = paymentPlanID[id].NumberOfInstalment; // 5
 
-        return (paymentPlanID[Id].time - block.timestamp) / totalPayments;
+        return (paymentPlanID[id].time - block.timestamp) / totalPayments;
     }
 
     // ======== Booleans Functions =========
@@ -521,30 +548,38 @@ contract CreditScore is
         isClient = hasRole(LENDER_ROLE, lender);
     }
 
-    /// @param Id the payment plan ID
+    /// @param id the payment plan ID
     /// @return onTime boolean if the payment plan is on time
-    function isInstalmentOnTime(uint256 Id) public view returns (bool onTime) {
-        onTime = block.timestamp <= getNextInstalmentDeadline(Id);
+    function isInstalmentOnTime(uint256 id) public view returns (bool onTime) {
+        onTime = block.timestamp <= getNextInstalmentDeadline(id);
     }
 
-    /// @param Id the payment plan ID
+    /// @param id the payment plan ID
     /// @param amount the amount of the payment
     /// @return sufficient boolean if the payment is sufficient
     function isInstalmentSufficient(
-        uint256 Id,
+        uint256 id,
         uint256 amount
     ) public view returns (bool sufficient) {
-        sufficient = amount >= getNextInstalmentAmount(Id);
+        sufficient = amount >= getNextInstalmentAmount(id);
     }
 
-    /// @param Id the payment plan ID
+    /// @param id the payment plan is of the user
+    /// @return defaulted boolean if the payment plan is defaulted
+    function isPaymentPlanDefaulted(
+        uint256 id
+    ) public view returns (bool defaulted) {
+        defaulted = paymentPlanID[id].defaulted;
+    }
+
+    /// @param id the payment plan ID
     /// @return lender of the payment plan
-    function getLenderFromId(uint256 Id) public view returns (address lender) {
-        lender = paymentPlanID[Id].Lender;
+    function getLenderFromId(uint256 id) public view returns (address lender) {
+        lender = paymentPlanID[id].Lender;
     }
 
     /// @notice This function can only be called by the owner of the payment plan or a lender
-    /// @param Id the payment plan ID
+    /// @param id the payment plan ID
     /// @return active of the payment plan
     /// @return time of the payment plan
     /// @return paidDebt of the payment plan
@@ -553,18 +588,18 @@ contract CreditScore is
     /// @return NumberOfInstalment of the payment plan
     /// @return interest of the payment plan
     function getPaymentPlan(
-        uint256 Id
+        uint256 id
     )
         public
         view
         returns (bool, uint256, uint256, uint256, uint256, uint32, uint16)
     {
         require(
-            msg.sender == paymentPlanID[Id].owner ||
+            msg.sender == paymentPlanID[id].owner ||
                 hasRole(LENDER_ROLE, msg.sender),
             NotAuthorized()
         );
-        PaymentPlan memory plan = paymentPlanID[Id];
+        PaymentPlan memory plan = paymentPlanID[id];
         return (
             plan.active,
             plan.time,
@@ -580,17 +615,17 @@ contract CreditScore is
 
     /// @dev Updates the credit score of a user based on the payment amount and plan Id
     /// @param amount The amount of the payment
-    /// @param Id The ID of the payment plan
+    /// @param id The ID of the payment plan
     /// @notice This function is called internally when a payment is made
-    function updateCreditScore(uint256 amount, uint256 Id) internal {
-        address client = paymentPlanID[Id].owner;
+    function updateCreditScore(uint256 amount, uint256 id) internal {
+        address client = paymentPlanID[id].owner;
         address lender = msg.sender;
         uint16 currentScore = userProfiles[client].creditScore[lender];
 
         // Check payment conditions using getter functions
-        bool meetsPaymentAmount = isInstalmentSufficient(Id, amount);
-        bool isOnTime = isInstalmentOnTime(Id);
-        uint256 expectedPaymentAmount = getNextInstalmentAmount(Id);
+        bool meetsPaymentAmount = isInstalmentSufficient(id, amount);
+        bool isOnTime = isInstalmentOnTime(id);
+        uint256 expectedPaymentAmount = getNextInstalmentAmount(id);
 
         if (isOnTime && meetsPaymentAmount) {
             // Maximum increase for perfect payment
@@ -639,7 +674,7 @@ contract CreditScore is
                 userProfiles[client].creditScore[lender] = 300;
             }
         }
-        paymentPlanID[Id].NumberOfInstalment--;
+        paymentPlanID[id].NumberOfInstalment--;
         emit CreditScoreUpdated(client);
     }
 
