@@ -25,7 +25,7 @@ export default function WalletBtton() {
   return (
     <>
       <Button onClick={() => switchChain({ chainId: chainId })}>switchChain</Button>
-      <select onChange={(e) => setChainId(Number(e.target.value))}>
+      <select onChange={(e) => setChainId(Number(e.target.value) as 31337 | 137 | 80002)}>
         <option value={31337}>Anvil</option>
         <option value={137}>Polygon</option>
         <option value={80002}>Polygon Amoy</option>
