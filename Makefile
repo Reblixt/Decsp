@@ -1,4 +1,5 @@
 -include .env
+-include contracts/.env
 
 .PHONY: Help 
 
@@ -48,7 +49,7 @@ deploy-amoy-account:
 	@cd contracts && forge script script/DeployCreditScore.s.sol:DeployCreditScore $(NETWORK_ARGS_ACCOUNT_AMOY)
 
 deploy-amoy-account-verify:
-	@cd contracts && forge script script/DeployCreditScore.s.sol:DeployCreditScore $(NETWORK_ARGS_ACCOUNT_AMOY) --verify
+	@cd contracts && forge script script/DeployCreditScore.s.sol:DeployCreditScore $(NETWORK_ARGS_ACCOUNT_AMOY) --etherscan-api-key $(ETHERSCAN_API) --verify
 
 deploy-polygon-verify:
 	@cd contracts && forge script script/DeployCreditScore.s.sol:DeployCreditScore $(NETWORK_ARGS_DEPLOYER) --verify

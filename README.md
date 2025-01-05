@@ -43,3 +43,6 @@ make doc
 - Chadcn (React Component Library)
 - TailwindCSS
 - Wagmi, Viem and Tanstack
+
+### Verified Contract polygonscan (Amoy)
+[Polygon Scan amoy](https://amoy.polygonscan.com/address/0x546c6B3345Bc299c51Bc0C65B031c9a587EEEf11#code)

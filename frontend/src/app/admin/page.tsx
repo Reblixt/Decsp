@@ -27,7 +27,7 @@ export default function Page() {
     functionName: "paused",
   })
 
-  const { data: lenders, lStatus, lError, refetch } = useReadContract({
+  const { data: lenders, status: lStatus, error: lError, refetch } = useReadContract({
     abi: creditScoreAbi,
     address: creditScoreAddress,
     functionName: "getActiveLenders",

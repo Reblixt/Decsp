@@ -1,7 +1,8 @@
 import { Address } from "viem";
 
 export const creditScoreAddress =
-  "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512" as Address;
+  "0x41ad920658e3099c978dc353f9614c2fa3fbf698" as Address;
+// "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512" as Address;
 
 export const creditScoreAbi = [
   {
